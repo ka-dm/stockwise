@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   cockroachdb:
     image: cockroachdb/cockroach:v23.1.11
@@ -23,6 +21,7 @@ services:
     depends_on:
       - cockroachdb
     restart: unless-stopped
+    command: ["./main"]
 
   frontend:
     build: ./frontend
@@ -31,6 +30,9 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    volumes:
+      - ./frontend/stockwise:/app/stockwise
+      - /app/stockwise/node_modules
 
 volumes:
   cockroach-data: 
