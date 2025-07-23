@@ -21,7 +21,9 @@ services:
     depends_on:
       - cockroachdb
     restart: unless-stopped
-    command: ["./main"]
+    volumes:
+      - ./backend:/app
+    command: ["go", "run", "main.go"]
 
   frontend:
     build: ./frontend
