@@ -8,19 +8,17 @@ import (
 
 // Stock representa la estructura de un stock en la base de datos
 type Stock struct {
-	ID         uint           `json:"id" gorm:"primaryKey"`
-	Ticker     string         `json:"ticker" gorm:"not null"`
-	TargetFrom string         `json:"target_from"`
-	TargetTo   string         `json:"target_to"`
-	Company    string         `json:"company"`
-	Action     string         `json:"action"`
-	Brokerage  string         `json:"brokerage"`
-	RatingFrom string         `json:"rating_from"`
-	RatingTo   string         `json:"rating_to"`
-	Time       string         `json:"time"`
-	CreatedAt  time.Time      `json:"created_at"`
-	UpdatedAt  time.Time      `json:"updated_at"`
-	DeletedAt  gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
+	ID         uint      `json:"id" gorm:"primaryKey"`
+	Ticker     string    `json:"ticker" gorm:"not null;uniqueIndex:idx_ticker_time"`
+	TargetFrom string    `json:"target_from"`
+	TargetTo   string    `json:"target_to"`
+	Company    string    `json:"company"`
+	Action     string    `json:"action"`
+	Brokerage  string    `json:"brokerage"`
+	RatingFrom string    `json:"rating_from"`
+	RatingTo   string    `json:"rating_to"`
+	Time       string    `json:"time" gorm:"not null;uniqueIndex:idx_ticker_time"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // TableName especifica el nombre de la tabla

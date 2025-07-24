@@ -4,6 +4,8 @@ import (
 	"Stock/database"
 	"Stock/models"
 	"log"
+
+	"gorm.io/gorm/clause"
 )
 
 // StockRepository maneja las operaciones de base de datos para stocks
@@ -23,7 +25,7 @@ func (r *StockRepository) Create(stock *models.Stock) error {
 // CreateBatch crea múltiples stocks
 func (r *StockRepository) CreateBatch(stocks []models.Stock) error {
 	log.Printf("Creating batch of %d stocks", len(stocks))
-	return database.DB.Create(&stocks).Error
+	return database.DB.Clauses(clause.OnConflict{DoNothing: true}).Create(&stocks).Error
 }
 
 // FindAll obtiene todos los stocks

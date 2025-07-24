@@ -6,12 +6,14 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"Stock/models"
 	"Stock/services"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 // StockHandler maneja las rutas relacionadas con stocks
@@ -27,94 +29,111 @@ func NewStockHandler() *StockHandler {
 }
 
 // GetStocks maneja la consulta de los stocks desde la API externa y los guarda en la BD
-func (h *StockHandler) GetStocks(c *gin.Context) {
-	// Crear cliente HTTP con timeout
+func (h *StockHandler) FetchStocksAPI(c *gin.Context) {
+	// Cargar variables de entorno (solo necesario en desarrollo)
+	_ = godotenv.Load()
+
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
 
-	// Crear la petición HTTP
-	req, err := http.NewRequest("GET", "https://api.karenai.click/swechallenge/list", nil)
-	if err != nil {
-		log.Printf("Error creating request: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creating request"})
+	// Obtén el token de la variable de entorno
+	token := os.Getenv("API_AUTH_TOKEN")
+	if token == "" {
+		log.Println("API_AUTH_TOKEN not set")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "API_AUTH_TOKEN not set"})
 		return
 	}
 
-	// Agregar headers necesarios
-	req.Header.Set("Authorization", "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdHRlbXB0cyI6MjMsImVtYWlsIjoia2V2aW4uZG9tLm1vbEBnbWFpbC5jb20iLCJleHAiOjE3NTMzNzE1NzgsImlkIjoiIiwicGFzc3dvcmQiOiJ4LyoqL0ZST00vKiovdXNlcnM7LS0gLScifQ.yQ6citCrEubD6_3pt2tHgWhyv0BbiNA3jBQvVkyKmQ8")
-	req.Header.Set("Content-Type", "application/json")
+	baseURL := "https://api.karenai.click/swechallenge/list"
+	nextPage := ""
+	var allStocks []models.Stock
 
-	// Realizar la petición
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("Error making request: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error making request: %v", err)})
-		return
+	for {
+		// Construir la URL con next_page si corresponde
+		url := baseURL
+		if nextPage != "" {
+			url = fmt.Sprintf("%s?next_page=%s", baseURL, nextPage)
+		}
+
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			log.Printf("Error creating request: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creating request"})
+			return
+		}
+
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("Error making request: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error making request: %v", err)})
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			log.Printf("API returned status: %d", resp.StatusCode)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("API returned status: %d", resp.StatusCode)})
+			return
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Printf("Error reading response body: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error reading response body"})
+			return
+		}
+
+		// Decodificar como objeto genérico para extraer stocks y next_page
+		var genericResponse map[string]interface{}
+		if err := json.Unmarshal(body, &genericResponse); err != nil {
+			log.Printf("Could not decode response: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not decode API response", "raw_response": string(body)})
+			return
+		}
+
+		// Buscar el array de stocks
+		var stocks []models.Stock
+		for _, value := range genericResponse {
+			if array, ok := value.([]interface{}); ok && len(array) > 0 {
+				jsonData, _ := json.Marshal(array)
+				if err := json.Unmarshal(jsonData, &stocks); err == nil {
+					allStocks = append(allStocks, stocks...)
+					break
+				}
+			}
+		}
+
+		// Buscar el next_page
+		nextPage = ""
+		if np, ok := genericResponse["next_page"]; ok {
+			if npStr, ok := np.(string); ok && npStr != "" {
+				nextPage = npStr
+			}
+		}
+
+		// Si no hay next_page, salir del bucle
+		if nextPage == "" {
+			break
+		}
 	}
-	defer resp.Body.Close()
 
-	// Verificar el código de estado
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("API returned status: %d", resp.StatusCode)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("API returned status: %d", resp.StatusCode)})
-		return
-	}
-
-	// Leer el cuerpo de la respuesta para debug
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("Error reading response body: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error reading response body"})
-		return
-	}
-
-	log.Printf("API Response: %s", string(body))
-
-	// Intentar decodificar como array directo de Stock
-	var stocks []models.Stock
-	if err := json.Unmarshal(body, &stocks); err == nil && len(stocks) > 0 {
-		log.Printf("Successfully decoded as direct Stock array with %d items", len(stocks))
-
-		// Usar el servicio para guardar
-		if err := h.stockService.CreateStocksBatch(stocks); err != nil {
+	// Guardar todos los stocks en la base de datos
+	if len(allStocks) > 0 {
+		if err := h.stockService.CreateStocksBatch(allStocks); err != nil {
 			log.Printf("Error saving to database: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error saving to database"})
 			return
 		}
-
-		c.JSON(http.StatusOK, stocks)
-		return
 	}
 
-	// Si no funciona, intentar decodificar como objeto genérico
-	var genericResponse map[string]interface{}
-	if err := json.Unmarshal(body, &genericResponse); err == nil {
-		log.Printf("Decoded as generic response: %+v", genericResponse)
-		// Buscar cualquier campo que contenga un array
-		for key, value := range genericResponse {
-			if array, ok := value.([]interface{}); ok && len(array) > 0 {
-				log.Printf("Found array in field '%s' with %d items", key, len(array))
-
-				// Convertir el array genérico a Stock
-				jsonData, _ := json.Marshal(array)
-				if err := json.Unmarshal(jsonData, &stocks); err == nil {
-					// Guardar en la base de datos
-					if err := h.stockService.CreateStocksBatch(stocks); err != nil {
-						log.Printf("Error saving to database: %v", err)
-						c.JSON(http.StatusInternalServerError, gin.H{"error": "Error saving to database"})
-						return
-					}
-
-					c.JSON(http.StatusOK, stocks)
-					return
-				}
-			}
-		}
-	}
-
-	log.Printf("Could not decode response in any expected format")
-	c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not decode API response", "raw_response": string(body)})
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Stocks guardados correctamente",
+		"total":   len(allStocks),
+	})
 }
 
 // GetStocksFromDB obtiene los stocks desde la base de datos
@@ -136,6 +155,11 @@ func (h *StockHandler) GetStocksFromDB(c *gin.Context) {
 func RegisterStockRoutes(r *gin.Engine) {
 	handler := NewStockHandler()
 
-	r.GET("/stocks", handler.GetStocks)
-	r.GET("/stocks/db", handler.GetStocksFromDB)
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "API working",
+		})
+	})
+	r.GET("/stocks", handler.GetStocksFromDB)
+	r.GET("/stocks/fetch", handler.FetchStocksAPI)
 }
