@@ -9,7 +9,7 @@ import (
 // Stock representa la estructura de un stock en la base de datos
 type Stock struct {
 	ID         uint           `json:"id" gorm:"primaryKey"`
-	Ticker     string         `json:"ticker" gorm:"not null;uniqueIndex"`
+	Ticker     string         `json:"ticker" gorm:"not null"`
 	TargetFrom string         `json:"target_from"`
 	TargetTo   string         `json:"target_to"`
 	Company    string         `json:"company"`
