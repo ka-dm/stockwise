@@ -113,25 +113,24 @@ onMounted(() => {
     <div v-else-if="stocks.length > 0" class="overflow-x-auto">
       <table class="table-auto w-full border-collapse shadow-lg overflow-hidden">
         <thead>
-          <tr class="bg-blue-600 text-white">
-            <th class="px-4 py-3 text-left font-semibold">Ticker</th>
-            <th class="px-4 py-3 text-left font-semibold">Company</th>
-            <th class="px-4 py-3 text-left font-semibold">Action</th>
-            <th class="px-4 py-3 text-left font-semibold">Brokerage</th>
-            <th class="px-4 py-3 text-left font-semibold">Rating</th>
-            <th class="px-4 py-3 text-left font-semibold">Target Price</th>
-            <th class="px-4 py-3 text-left font-semibold">Time</th>
+          <tr class="bg-white">
+            <th class="px-4 py-3 text-left font-semibold" colspan="7">Top mejores recomendaciones</th>
           </tr>
         </thead>
         <tbody>
           <tr 
             v-for="stock in stocks" 
             :key="stock.id" 
-            class="bg-white even:bg-gray-100 hover:bg-yellow-50 transition"
+            class="bg-white even:bg-gray-100 hover:bg-yellow-50 transition border-y border-gray-200"
           >
-            <td class="px-4 py-4 border-b font-semibold text-blue-600">{{ stock.ticker }}</td>
-            <td class="px-4 py-4 border-b">{{ stock.company }}</td>
-            <td class="px-4 py-4 border-b">
+            <td class="flex flex-col px-4 py-4 max-w-70 font-semibold">
+              <span class="inline-flex items-center rounded-sm ring-1 ring-inset ring-green-400 p-1 text-sm text-green-800 bg-green-100 w-fit">
+                {{ stock.ticker }}
+              </span>
+              <span class="text-gray-500 text-xs whitespace-nowrap">{{ stock.company }}</span>
+              <span class="text-gray-700 text-sm whitespace-nowrap mt-2">{{ stock.brokerage }}</span>
+            </td>
+            <td class="px-4 py-4">
               <span 
                 :class="{
                   'text-green-600 font-semibold': stock.action === 'Buy',
@@ -142,20 +141,19 @@ onMounted(() => {
                 {{ stock.action }}
               </span>
             </td>
-            <td class="px-4 py-4 border-b">{{ stock.brokerage }}</td>
-            <td class="px-4 py-4 border-b">
+            <td class="px-4 py-4">
               {{ stock.rating_from }} 
               <span v-if="stock.rating_to && stock.rating_to !== stock.rating_from" class="text-gray-500">
                 → {{ stock.rating_to }}
               </span>
             </td>
-            <td class="px-4 py-4 border-b">
+            <td class="px-4 py-4">
               {{ stock.target_from }}
               <span v-if="stock.target_to && stock.target_to !== stock.target_from" class="text-gray-500">
                 → {{ stock.target_to }}
               </span>
             </td>
-            <td class="px-4 py-4 border-b text-sm text-gray-600">{{ stock.time }}</td>
+            <td class="px-4 py-4 text-sm text-gray-600">{{ stock.time }}</td>
           </tr>
         </tbody>
       </table>
